@@ -2,26 +2,55 @@
 session_start();
 require_once "../config/db.php";
 
-if (!isset($_SESSION["usuario_id"]) || $_SESSION["tipo"] !== "coordenador") {
+if (!isset($_SESSION["usuario_id"]) || ($_SESSION["tipo"] ?? "") !== "coordenador") {
   header("Location: ../auth/login.php?erro=Acesso%20restrito.");
   exit;
 }
 
-$busca = trim($_GET["q"] ?? "");
-
-// Busca usuários
-if ($busca !== "") {
-  $like = "%{$busca}%";
-  $stmt = $conn->prepare("SELECT id, nome, email, tipo FROM usuarios WHERE nome LIKE ? OR email LIKE ? ORDER BY nome");
-  $stmt->bind_param("ss", $like, $like);
-} else {
-  $stmt = $conn->prepare("SELECT id, nome, email, tipo FROM usuarios ORDER BY nome");
+function normalize($s) {
+  $s = mb_strtolower($s ?? "", "UTF-8");
+  $map = [
+    'á'=>'a','à'=>'a','â'=>'a','ã'=>'a','ä'=>'a',
+    'é'=>'e','è'=>'e','ê'=>'e','ë'=>'e',
+    'í'=>'i','ì'=>'i','î'=>'i','ï'=>'i',
+    'ó'=>'o','ò'=>'o','ô'=>'o','õ'=>'o','ö'=>'o',
+    'ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u',
+    'ç'=>'c'
+  ];
+  return strtr($s, $map);
 }
+
+$busca = trim($_GET["q"] ?? "");
+$msg  = $_GET["msg"] ?? "";
+$erro = $_GET["erro"] ?? "";
+
+// SELECT com perfil dinâmico (sem usuarios.tipo)
+$sqlBase = "
+  SELECT 
+    u.id,
+    u.nome,
+    u.email,
+    CASE
+      WHEN c.usuario_id IS NOT NULL THEN 'Coordenador'
+      WHEN p.usuario_id IS NOT NULL THEN 'Professor'
+      WHEN a.usuario_id IS NOT NULL THEN 'Aluno'
+      ELSE 'Sem perfil'
+    END AS perfil
+  FROM usuarios u
+  LEFT JOIN coordenadores c ON c.usuario_id = u.id
+  LEFT JOIN professores   p ON p.usuario_id = u.id
+  LEFT JOIN alunos        a ON a.usuario_id = u.id
+ WHERE c.usuario_id IS NOT NULL
+     OR p.usuario_id IS NOT NULL
+     OR a.usuario_id IS NOT NULL
+";
+
+// Sempre busca tudo no SQL (mais estável) e filtra no PHP (sem acento)
+$stmt = $conn->prepare($sqlBase . " ORDER BY u.nome");
 $stmt->execute();
 $usuarios = $stmt->get_result();
 
-$msg = $_GET["msg"] ?? "";
-$erro = $_GET["erro"] ?? "";
+$buscaNorm = normalize($busca);
 ?>
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -29,45 +58,40 @@ $erro = $_GET["erro"] ?? "";
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gerenciar Usuários</title>
+
   <link rel="stylesheet" href="../assets/css/css.css">
-  <style>
-    .topbar { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom: 16px; }
-    .topbar a { text-decoration:none; }
-    .table-wrap { overflow:auto; }
-    table { width:100%; border-collapse: collapse; background:#fff; border:1px solid #CBD5E1; border-radius: 12px; overflow:hidden; }
-    th, td { padding: 10px; border-bottom: 1px solid #E2E8F0; text-align:left; }
-    th { background: #EFF6FF; color:#1E3A8A; }
-    .actions { display:flex; gap:8px; flex-wrap: wrap; }
-    .btn-sm { padding: 8px 10px; border-radius: 10px; border:1px solid #94A3B8; background:#fff; color:#1E3A8A; cursor:pointer; text-decoration:none; font-size: 14px; }
-    .btn-sm:hover { background:#EFF6FF; }
-    .btn-danger { border-color:#FCA5A5; color:#991B1B; }
-    .btn-danger:hover { background:#FEE2E2; }
-    .search { display:flex; gap:8px; align-items:center; margin: 12px 0 16px; }
-    .search input { margin:0; }
-  </style>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
+
 <body>
 <main class="container" style="max-width: 900px;">
+
+  <?php if ($msg): ?>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+      <?php echo htmlspecialchars($msg); ?>
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+    </div>
+  <?php endif; ?>
+
+  <?php if ($erro): ?>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+      <?php echo htmlspecialchars($erro); ?>
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+    </div>
+  <?php endif; ?>
+
   <div class="topbar">
     <div>
       <h1>Gerenciar Usuários</h1>
       <p class="sub">Crie, edite perfil, redefina senha e remova usuários.</p>
     </div>
+
     <div class="actions">
-      <a class="btn-sm" href="criar_usuario.php">+ Novo usuário</a>
+      <a class="btn-sm" href="user/criar_usuario.php">+ Novo usuário</a>
       <a class="btn-sm" href="painel.php">Voltar</a>
       <a class="btn-sm" href="../auth/logout.php">Sair</a>
     </div>
   </div>
-
-  <?php if ($msg): ?>
-    <div class="alert"><?php echo htmlspecialchars($msg); ?></div>
-  <?php endif; ?>
-  <?php if ($erro): ?>
-    <div class="alert" style="border-color:#FCA5A5; background:#FEE2E2; color:#991B1B;">
-      <?php echo htmlspecialchars($erro); ?>
-    </div>
-  <?php endif; ?>
 
   <form class="search" method="GET">
     <input type="text" name="q" placeholder="Buscar por nome ou e-mail" value="<?php echo htmlspecialchars($busca); ?>">
@@ -88,19 +112,32 @@ $erro = $_GET["erro"] ?? "";
         </tr>
       </thead>
       <tbody>
-      <?php while ($u = $usuarios->fetch_assoc()): ?>
+
+      <?php
+      $achou = 0;
+      while ($u = $usuarios->fetch_assoc()):
+        // filtro sem acento (João = Joao)
+        if ($busca !== "") {
+          $nomeNorm  = normalize($u["nome"]);
+          $emailNorm = normalize($u["email"]);
+          if (strpos($nomeNorm, $buscaNorm) === false && strpos($emailNorm, $buscaNorm) === false) {
+            continue;
+          }
+        }
+        $achou++;
+      ?>
         <tr>
           <td><?php echo htmlspecialchars($u["nome"]); ?></td>
           <td><?php echo htmlspecialchars($u["email"]); ?></td>
-          <td><?php echo htmlspecialchars($u["tipo"]); ?></td>
+          <td><?php echo htmlspecialchars($u["perfil"]); ?></td>
           <td>
             <div class="actions">
-              <a class="btn-sm" href="editar_usuario.php?id=<?php echo (int)$u["id"]; ?>">Editar</a>
-              <a class="btn-sm" href="redefinir_senha.php?id=<?php echo (int)$u["id"]; ?>">Senha</a>
+              <a class="btn-sm" href="user/editar_usuario.php?id=<?php echo (int)$u["id"]; ?>">Editar</a>
+              <a class="btn-sm" href="user/redefinir_senha.php?id=<?php echo (int)$u["id"]; ?>">Senha</a>
 
               <?php if ((int)$u["id"] !== (int)$_SESSION["usuario_id"]): ?>
                 <a class="btn-sm btn-danger"
-                   href="excluir_usuario.php?id=<?php echo (int)$u["id"]; ?>"
+                   href="user/excluir_usuario.php?id=<?php echo (int)$u["id"]; ?>"
                    onclick="return confirm('Tem certeza que deseja excluir este usuário?');">
                    Excluir
                 </a>
@@ -111,9 +148,21 @@ $erro = $_GET["erro"] ?? "";
           </td>
         </tr>
       <?php endwhile; ?>
+
+      <?php if ($achou === 0): ?>
+        <tr>
+          <td colspan="4" style="text-align:center; padding:16px; color:#64748B;">
+            Nenhum usuário foi encontrado.
+          </td>
+        </tr>
+      <?php endif; ?>
+
       </tbody>
     </table>
   </div>
+
 </main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

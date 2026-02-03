@@ -127,3 +127,115 @@ input:focus {
 .link a:hover {
   text-decoration: underline;
 }
+
+
+/* Parte do coord */
+
+/* =========================
+   GERENCIAR USUÁRIOS
+========================= */
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.topbar a {
+  text-decoration: none;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+/* Tabela */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+th,
+td {
+  padding: 10px;
+  border-bottom: 1px solid #E2E8F0;
+  text-align: left;
+}
+
+th {
+  background: #EFF6FF;
+  color: #1E3A8A;
+  font-weight: 600;
+}
+
+/* Ações */
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Botões pequenos */
+.btn-sm {
+  display: inline-block;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #94A3B8;
+  background: #FFFFFF;
+  color: #1E3A8A;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 14px;
+  transition: background 0.2s ease;
+}
+
+.btn-sm:hover {
+  background: #EFF6FF;
+}
+
+/* Botão de perigo (excluir) */
+.btn-danger {
+  border-color: #FCA5A5;
+  color: #991B1B;
+}
+
+.btn-danger:hover {
+  background: #FEE2E2;
+}
+
+/* Busca */
+.search {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 12px 0 16px;
+}
+
+.search input {
+  margin: 0;
+}
+
+/* FIm parte coord */
+
+/* USER CRIAR */
+
+select {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid #94A3B8;
+  font-size: 16px;
+  background: #fff;
+}
+
+select:focus {
+  border-color: #2563EB;
+  outline: none;
+}
+/* FIM USER CRIAR */

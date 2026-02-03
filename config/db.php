@@ -2,7 +2,7 @@
 
 $host = "localhost";
 $usuario = "root";
-$senha = "";
+$senha = "root";
 $banco = "acessibilidade_curricular";
 
 $conn = new mysqli($host, $usuario, $senha, $banco);

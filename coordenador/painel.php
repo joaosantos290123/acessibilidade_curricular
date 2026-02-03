@@ -21,7 +21,7 @@ if (!isset($_SESSION["usuario_id"]) || $_SESSION["tipo"] !== "coordenador") {
   <div class="card">
   <div class="btn-group">
     <a class="btn" href="usuarios.php">Gerenciar usuários</a>
-    <a class="btn" href="../professor/painel.php">Visualizar necessidades</a>
+    <a class="btn" href="necessidade.php">Visualizar necessidades</a>
     <a class="btn" href="../auth/logout.php">Sair</a>
   </div>
 </div>

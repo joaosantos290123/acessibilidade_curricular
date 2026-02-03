@@ -1,17 +1,15 @@
 <?php
 require_once "../config/db.php";
 session_start();
+
 if (isset($_SESSION["usuario_id"])) {
-    if ($_SESSION["tipo"] === "aluno") {
-        header("Location: ../aluno/painel.php");
-        exit;
-    } elseif ($_SESSION["tipo"] === "professor") {
-        header("Location: ../professor/painel.php");
-        exit;
-    } elseif ($_SESSION["tipo"] === "coordenador") {
-        header("Location: ../coordenador/painel.php");
-        exit;
-    }
+  if ($_SESSION["tipo"] === "aluno") {
+    header("Location: ../aluno/painel.php"); exit;
+  } elseif ($_SESSION["tipo"] === "professor") {
+    header("Location: ../professor/painel.php"); exit;
+  } else {
+    header("Location: ../coordenador/painel.php"); exit;
+  }
 }
 
 $erro = $_GET["erro"] ?? "";
