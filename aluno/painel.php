@@ -29,7 +29,6 @@ $stmt->execute();
 $res = $stmt->get_result();
 
 if ($res->num_rows !== 1) {
-  // Usuário logado mas sem registro em alunos -> bloqueia
   header("Location: ../auth/login.php?erro=Perfil%20de%20aluno%20n%C3%A3o%20encontrado.");
   exit;
 }
@@ -37,11 +36,9 @@ if ($res->num_rows !== 1) {
 $al = $res->fetch_assoc();
 
 $laudo_status = $al["laudo_status"] ?? "nao_informado";
+$podeEnviar = in_array($laudo_status, ["solicitado", "recusado"], true);
 
-// Regras de notificação:
-// - Se coord solicitou -> "solicitado"
-// - Se coord recusou -> aluno precisa reenviar -> "recusado"
-$temNotificacao = in_array($laudo_status, ["solicitado", "recusado"], true);
+$temNotificacao = $podeEnviar; // notificação só quando precisa ação
 $notCount = $temNotificacao ? 1 : 0;
 
 function label_status($s) {
@@ -57,16 +54,28 @@ function label_status($s) {
 
 function badge_class($s) {
   return match ($s) {
-    "solicitado" => "text-bg-warning",
-    "enviado"    => "text-bg-info",
-    "aprovado"   => "text-bg-success",
-    "recusado"   => "text-bg-danger",
-    default      => "text-bg-secondary",
+    "solicitado" => "bg-warning text-dark",
+    "enviado"    => "bg-info text-dark",
+    "aprovado"   => "bg-success",
+    "recusado"   => "bg-danger",
+    default      => "bg-secondary",
   };
 }
 
-// Botão de enviar laudo aparece quando precisa ação do aluno
-$podeEnviar = in_array($laudo_status, ["solicitado", "recusado"], true);
+function initials($name) {
+  $name = trim($name ?? "");
+  if ($name === "") return "A";
+  $parts = preg_split("/\s+/", $name);
+  $a = mb_substr($parts[0] ?? "A", 0, 1, "UTF-8");
+  $b = mb_substr($parts[count($parts)-1] ?? "", 0, 1, "UTF-8");
+  $out = mb_strtoupper($a . $b, "UTF-8");
+  return $out;
+}
+
+$nome = $al["nome"];
+$ini = initials($nome);
+$statusLabel = label_status($laudo_status);
+$statusClass = badge_class($laudo_status);
 ?>
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -77,142 +86,171 @@ $podeEnviar = in_array($laudo_status, ["solicitado", "recusado"], true);
 
   <link rel="stylesheet" href="../assets/css/css.css">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-
-  <style>
-    .page-wrap { max-width: 1100px; margin: 32px auto; padding: 0 16px; }
-    .topbar {
-      display:flex; justify-content:space-between; align-items:center; gap:16px;
-      padding: 14px 16px; border:1px solid #CBD5E1; border-radius:16px; background:#fff;
-    }
-    .brand { display:flex; flex-direction:column; }
-    .brand h1 { margin:0; color:#1E3A8A; font-size: 20px; }
-    .brand small { color:#64748B; }
-    .rightbox { display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
-    .icon-btn { position:relative; }
-    .notif-dot {
-      position:absolute; top:-4px; right:-4px;
-      min-width: 18px; height: 18px; padding: 0 5px;
-      border-radius: 999px; font-size: 12px;
-      display:flex; align-items:center; justify-content:center;
-      background:#dc3545; color:#fff;
-    }
-    .card-clean { border:1px solid #CBD5E1; border-radius:16px; }
-  </style>
 </head>
-<body>
 
-<main class="page-wrap">
+<body class="app-body">
+<main class="dash">
 
-  <!-- TOPBAR -->
-  <div class="topbar mb-3">
-    <div class="brand">
-      <h1>Plataforma de Acessibilidade Curricular</h1>
-      <small>Área do aluno</small>
+  <!-- Header -->
+  <header class="dash-header">
+    <div class="dash-brand">
+      <div class="avatar"><?php echo htmlspecialchars($ini); ?></div>
+      <div class="brand-text">
+        <div class="brand-title">Painel do Aluno</div>
+        <div class="brand-sub">
+          <?php echo htmlspecialchars($nome); ?>
+          <span class="sep">•</span>
+          <?php echo htmlspecialchars($al["email"]); ?>
+        </div>
+      </div>
     </div>
 
-    <div class="rightbox">
-      <!-- Sininho (dropdown) -->
-      <div class="dropdown icon-btn">
-        <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-          🔔
-        </button>
-        <?php if ($notCount > 0): ?>
-          <span class="notif-dot"><?php echo (int)$notCount; ?></span>
-        <?php endif; ?>
+    <div class="dash-actions">
+      <!-- Chip status -->
+      <!-- <div class="chip">
+        <span class="chip-label">Laudo</span>
+        <span class="badge <?php echo $statusClass; ?>"><?php echo htmlspecialchars($statusLabel); ?></span>
+      </div> -->
 
-        <ul class="dropdown-menu dropdown-menu-end" style="min-width: 320px;">
-          <li class="px-3 py-2">
+      <!-- Notificações -->
+      <div class="dropdown notif-wrap">
+        <button class="btn btn-outline-secondary btn-sm notif-btn" data-bs-toggle="dropdown" aria-expanded="false">
+          <span class="me-1">🔔</span> Notificações
+          <?php if ($notCount > 0): ?>
+            <span class="notif-badge"><?php echo (int)$notCount; ?></span>
+          <?php endif; ?>
+        </button>
+
+        <ul class="dropdown-menu dropdown-menu-end notif-menu">
+          <li class="px-3 pt-2">
             <div class="fw-semibold">Notificações</div>
-            <div class="text-muted small">Acompanhe solicitações do coordenador.</div>
+            <div class="text-muted small">Solicitações e atualizações.</div>
           </li>
           <li><hr class="dropdown-divider"></li>
 
-          <?php if ($temNotificacao): ?>
-            <li class="px-3 pb-2">
-              <?php if ($laudo_status === "solicitado"): ?>
-                <div class="fw-semibold">📄 Laudo solicitado</div>
-                <div class="small text-muted">O coordenador solicitou o envio do laudo em PDF.</div>
-              <?php else: ?>
-                <div class="fw-semibold">⚠️ Laudo recusado</div>
-                <div class="small text-muted">Seu laudo foi recusado. Envie novamente o PDF.</div>
-              <?php endif; ?>
-
+          <?php if ($podeEnviar && $laudo_status === "solicitado"): ?>
+            <li class="px-3 pb-3">
+              <div class="fw-semibold">📄 Laudo solicitado</div>
+              <div class="small text-muted">Envie o laudo em PDF para análise.</div>
               <div class="mt-2 d-grid">
-                <a class="btn btn-primary btn-sm" href="enviar_laudo.php">Enviar laudo (PDF)</a>
+                <a class="btn btn-primary btn-sm" href="enviar_laudo.php">Enviar laudo</a>
+              </div>
+            </li>
+          <?php elseif ($podeEnviar && $laudo_status === "recusado"): ?>
+            <li class="px-3 pb-3">
+              <div class="fw-semibold">⚠️ Laudo recusado</div>
+              <div class="small text-muted">Envie novamente o PDF.</div>
+              <div class="mt-2 d-grid">
+                <a class="btn btn-primary btn-sm" href="enviar_laudo.php">Reenviar laudo</a>
               </div>
             </li>
           <?php else: ?>
-            <li class="px-3 pb-2 text-muted small">Sem notificações no momento.</li>
+            <li class="px-3 pb-3 text-muted small">Sem notificações no momento.</li>
           <?php endif; ?>
         </ul>
       </div>
 
-      <!-- Status do laudo -->
-      <span class="badge <?php echo badge_class($laudo_status); ?>">
-        Laudo: <?php echo htmlspecialchars(label_status($laudo_status)); ?>
-      </span>
+      <a class="btn btn-outline-danger btn-sm" href="../auth/logout.php">Sair</a>
+    </div>
+  </header>
 
-      <!-- Botão enviar laudo (só quando solicitado/recusado) -->
-      <?php if ($podeEnviar): ?>
+  <!-- Banner pendência -->
+  <?php if ($podeEnviar): ?>
+    <section class="dash-banner">
+      <div class="banner-icon">📄</div>
+      <div class="banner-text">
+        <div class="banner-title">
+          <?php echo ($laudo_status === "solicitado") ? "Envio de laudo solicitado" : "Laudo recusado"; ?>
+        </div>
+        <div class="banner-sub">
+          Envie um arquivo <strong>PDF</strong>. Evite dados médicos detalhados: foque no necessário para comprovação.
+        </div>
+      </div>
+      <div class="banner-cta">
         <a class="btn btn-primary" href="enviar_laudo.php">Enviar laudo (PDF)</a>
-      <?php endif; ?>
+      </div>
+    </section>
+  <?php endif; ?>
 
-      <a class="btn btn-outline-danger" href="../auth/logout.php">Sair</a>
-    </div>
-  </div>
-
-  <!-- CONTEÚDO -->
-  <div class="row g-3">
-    <div class="col-12 col-lg-5">
-      <div class="card card-clean p-3 p-md-4">
-        <h5 class="mb-2" style="color:#1E3A8A;">Meus dados</h5>
-        <div class="mb-1"><strong>Nome:</strong> <?php echo htmlspecialchars($al["nome"]); ?></div>
-        <div class="mb-1"><strong>E-mail:</strong> <?php echo htmlspecialchars($al["email"]); ?></div>
-        <div class="mb-1"><strong>Matrícula:</strong> <?php echo htmlspecialchars($al["matricula"]); ?></div>
-        <div class="mb-1"><strong>Série:</strong> <?php echo htmlspecialchars($al["serie"]); ?></div>
-
-        <hr>
-        <div class="d-flex align-items-center justify-content-between">
-          <div class="text-muted small">Status do laudo</div>
-          <span class="badge <?php echo badge_class($laudo_status); ?>">
-            <?php echo htmlspecialchars(label_status($laudo_status)); ?>
-          </span>
+  <!-- Resumo -->
+  <section class="dash-grid">
+    <div class="dash-card">
+      <div class="card-top">
+        <div>
+          <div class="card-kicker">Identificação</div>
+          <div class="card-value"><?php echo htmlspecialchars($al["matricula"]); ?></div>
         </div>
+        <div class="card-icon">🆔</div>
+      </div>
+      <div class="card-foot text-muted small">Matrícula</div>
+    </div>
 
-        <?php if ($laudo_status === "enviado"): ?>
-          <div class="text-muted small mt-2">
-            Enviado em: <?php echo htmlspecialchars($al["laudo_data_envio"] ?? "—"); ?>
-          </div>
-        <?php endif; ?>
+    <div class="dash-card">
+      <div class="card-top">
+        <div>
+          <div class="card-kicker">Turma</div>
+          <div class="card-value"><?php echo htmlspecialchars($al["serie"]); ?></div>
+        </div>
+        <div class="card-icon">🏫</div>
+      </div>
+      <div class="card-foot text-muted small">Série</div>
+    </div>
 
-        <?php if ($podeEnviar): ?>
-          <div class="alert alert-warning mt-3 mb-0">
-            Você tem uma pendência de laudo. Clique em <strong>Enviar laudo (PDF)</strong>.
+    <div class="dash-card">
+      <div class="card-top">
+        <div>
+          <div class="card-kicker">Status do laudo</div>
+          <div class="card-value">
+            <span class="badge <?php echo $statusClass; ?>"><?php echo htmlspecialchars($statusLabel); ?></span>
           </div>
+        </div>
+        <div class="card-icon">✅</div>
+      </div>
+      <div class="card-foot text-muted small">
+        <?php if (!empty($al["laudo_data_envio"])): ?>
+          Último envio: <?php echo htmlspecialchars($al["laudo_data_envio"]); ?>
+        <?php else: ?>
+          Nenhum envio registrado
         <?php endif; ?>
       </div>
     </div>
+  </section>
 
-    <div class="col-12 col-lg-7">
-      <div class="card card-clean p-3 p-md-4">
-        <h5 class="mb-2" style="color:#1E3A8A;">Ações</h5>
-        <p class="text-muted">Registre suas necessidades de aprendizagem e acesse conteúdos de acessibilidade.</p>
+  <!-- Ações -->
+  <section class="dash-actions-grid">
+    <a class="action-card primary" href="minhas_necessidades.php">
+      <div class="action-icon">📝</div>
+      <div class="action-title">Minhas necessidades</div>
+      <div class="action-sub">Registrar e acompanhar necessidades pedagógicas.</div>
+    </a>
 
-        <div class="d-grid gap-2">
-          <a class="btn btn-primary" href="minhas_necessidades.php">Minhas necessidades</a>
-          <a class="btn btn-outline-primary" href="acessibilidades.php">Conteúdos / Acessibilidades</a>
+    <a class="action-card" href="acessibilidades.php">
+      <div class="action-icon">📚</div>
+      <div class="action-title">Conteúdos e acessibilidades</div>
+      <div class="action-sub">Consultar exemplos e orientações de acessibilidade curricular.</div>
+    </a>
 
-          <?php if ($podeEnviar): ?>
-            <a class="btn btn-outline-warning" href="enviar_laudo.php">Enviar laudo (PDF)</a>
-          <?php endif; ?>
-        </div>
-
-        <div class="text-muted small mt-3">
-          * O laudo é opcional e só é solicitado quando necessário pelo coordenador.
-        </div>
+    <?php if ($podeEnviar): ?>
+      <a class="action-card warn" href="enviar_laudo.php">
+        <div class="action-icon">📎</div>
+        <div class="action-title">Enviar laudo (PDF)</div>
+        <div class="action-sub">Pendência aberta. Envie o documento em PDF.</div>
+      </a>
+    <?php else: ?>
+      <div class="action-card disabled" aria-disabled="true">
+        <div class="action-icon">📎</div>
+        <div class="action-title">Enviar laudo (PDF)</div>
+        <div class="action-sub">Disponível quando solicitado pela coordenação.</div>
       </div>
-    </div>
-  </div>
+    <?php endif; ?>
+
+    <a class="action-card" href="acessibilidades.php">
+      <div class="action-icon"></div>
+      <div class="action-title">...</div>
+      <div class="action-sub">...</div>
+    </a>
+
+  </section>
 
 </main>
 

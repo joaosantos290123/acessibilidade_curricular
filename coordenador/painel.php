@@ -22,6 +22,7 @@ if (!isset($_SESSION["usuario_id"]) || $_SESSION["tipo"] !== "coordenador") {
   <div class="btn-group">
     <a class="btn" href="usuarios.php">Gerenciar usuários</a>
     <a class="btn" href="necessidade.php">Visualizar necessidades</a>
+    <a class="btn btn-outline-primary" href="laudos.php">Analisar laudos</a>
     <a class="btn" href="../auth/logout.php">Sair</a>
   </div>
 </div>
